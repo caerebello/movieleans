@@ -19,11 +19,11 @@ knitr::opts_chunk$set(echo = TRUE)
 #loads the files and creates some variables used in the report text
 edx <- as.data.frame(read_csv('data/edx.csv'))
 validation <- as.data.frame(read_csv('data/validation.csv'))
-valid <- as.data.frame(read_csv('data/valid.csv'))
-pred <- as.data.frame(read_csv('data/pred.csv'))
-test_set <- as.data.frame(read_csv('data/test-set.csv'))
-new_train <- as.data.frame(read_csv('data/new-train.csv'))
-train_set <- new_train
+load("rdas/train-set.rda")
+load("rdas/test-set.rda")
+load("rdas/new-train.rda")
+load("rdas/pred.rda")
+load("rdas/valid.rda")
 #colors for plots
 color1 <- "#FA8072"
 color2 <- "#FFE0E0"
@@ -332,9 +332,18 @@ $$ Y_{u,i} = \mu + b_i + b_u + b_g + f(b_y) + \varepsilon_{u,i},\ with\  f(b_y)\
 ```{r bi+bu+bg+by prediction, include=FALSE}
 # make prediction with movie, user, genre and release year effects
 bi_bu_bg_by <- pred %>% mutate(y_hat = mu + ifelse(is.na(b_i), 0, b_i) + ifelse(is.na(b_u), 0, b_u) + ifelse(is.na(b_g), 0, b_g) + ifelse(is.na(b_y), 0, b_y))  %>% mutate(y_hat = ifelse(y_hat <= 0.5, 0.5, ifelse(y_hat >= 5, 5, y_hat)))
+load("rdas/fit-y.rda")
+load("rdas/fit-r.rda")
+load("rdas/fit-lm.rda")
+load("rdas/fit-glm.rda")
+load("rdas/fit-loess.rda")
 ```
-
+```{r, echo = FALSE}
+summary(fit_y)
+```
 Now we reach the RMSE of `r RMSE(test_set$rating, bi_bu_bg_by$y_hat)`.
+
+\newpage
 
 ### 2.4.2 Rating date
 
@@ -360,7 +369,9 @@ $$b_ r= \frac{1}{\lambda + n_i} \sum^{n_i}_{u=1} (Y_{u,i} - \mu - b_i - b_u - b_
 As with release year, local weighted regression was used to smooth the curve, but this time with span = 0.3.
 
 $$ Y_{u,i} = \mu + b_i + b_u + b_g + f(b_y) + f(b_r)+ \varepsilon_{u,i},\ with\  f(b_r)\ as\ loess\ function\ of\ evaluation\  year.$$
-
+```{r, echo = FALSE}
+summary(fit_r)
+```
 Now we reach the RMSE of `r RMSE(test_set$rating, pred$y_hat)`. 
 
 ---
@@ -368,7 +379,7 @@ Now we reach the RMSE of `r RMSE(test_set$rating, pred$y_hat)`.
 ## 2.5 Best lambda ($\lambda$)
 
 ```{r best lambda, include=FALSE}
-best_lambda <- as.data.frame(read_csv('data/best-lambda.csv'))
+load("rdas/best-lambda.rda")
 l <- best_lambda$lambdas[which.min(best_lambda$rmses)]
 ```
 
@@ -427,7 +438,9 @@ $$ res = Y_{u,i} - \mu - b_i - b_u - b_g - f(b_y) - f(b_r) $$
 Where $res$ is the redidual for user $u$, movie $i$ and their genre, release and rating year. 
 
 $$ Y_{u,i} = \mu + b_i + b_u + b_g + f(b_y) + f(b_r) + f(res) + \varepsilon_{u,i}\ with\  f(res)\ as\ linear\ regression\ function\ of\ residuals. $$
-
+```{r, echo = FALSE}
+summary(fit_lm)
+```
 With this model we reached the RMSE of `r RMSE(test_set$rating, pred$pred_lm)`.
 
 ### 2.6.3 Logistic regression
@@ -441,6 +454,9 @@ Logistic regression is the most commonly used GLM. It is an extension of linear 
 $$ g\{p(x_1, x_2, ... , x_5)\} = g\{Pr(Y = 1 \mid X_1 = x_1, X_2 = x_2,..., X_5 = x_5)\} = \beta_0 + \beta_1x_1 + \beta_2x_2 + ... + \beta_5x_5. $$
 
 $$ Y_{u,i} = \mu + b_i + b_u + b_g + f(b_y) + f(b_r) + f(res) + \varepsilon_{u,i}\ \ with\  f(res)\ as\ logistic\ regression\ function\ of\ residuals. $$
+```{r, echo = FALSE}
+summary(fit_glm)
+```
 
 With this model we reached the RMSE of `r RMSE(test_set$rating, pred$pred_glm)`, exactly the same as hitted with linear regression. This is expected since, like regression, the decision rule is a line, so $x_2$ is a linear function of $x_1$, what implies that logistic regression does not capture the non-linear true $p(x_1, ..., x_5)$.
 
@@ -449,10 +465,12 @@ With this model we reached the RMSE of `r RMSE(test_set$rating, pred$pred_glm)`,
 The loess function has been explained previously and with it our prediction was:
 
 $$ Y_{u,i} = \mu + b_i + b_u + b_g + f(b_y) + f(b_r) + f(res) + \varepsilon_{u,i}\ \ with\  f(res)\ as\ loess\ function\ of\ residuals.$$
-
+```{r, echo = FALSE}
+s_fit_loess <- summary(fit_loess)
+s_fit_loess$anova
+s_fit_loess$parametric.anova
+```
 In this case, the default settings for degree and span were used and the RMSE achieved was `r RMSE(test_set$rating, pred$pred_loess)`.
-
-\newpage
 
 ## 2.7 Ensemble
 
@@ -460,7 +478,7 @@ For our final prediction we use the average of the previous predictions. The bas
 
 The RMSE target less than 0.8649 was achieved by closing at `r RMSE(test_set$rating, pred$ensemble)`.
 
----
+\newpage
 
 # 3 Results 
 
@@ -484,8 +502,6 @@ The final prediction, found through the three previous predictions average, reac
 rmse_results <- data.frame(Methods = c("Effects","Effects + LM","Effects + GLM","Effects + LOESS", "Ensemble"), RMSE = c(RMSE(validation$rating, valid$y_hat), RMSE(validation$rating, valid$pred_lm), RMSE(validation$rating, valid$pred_glm),  RMSE(validation$rating, valid$pred_loess), RMSE(validation$rating, valid$ensemble)))
 kable(rmse_results) %>% row_spec(5, color = "white", background = color1) %>% kable_styling(bootstrap_options = "bordered", position = "center")
 ```
-
-\newpage
 
 # 4 Conclusion
 

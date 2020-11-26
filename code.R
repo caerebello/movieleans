@@ -20,8 +20,8 @@ test_index <- createDataPartition(y = edx$rating, times = 1, p = 0.2, list = FAL
 train_set <- edx[-test_index,]
 test_set <- edx[test_index,]
 test_set <- test_set %>% semi_join(train_set, by = "movieId") %>% semi_join(train_set, by = "userId")
-write_csv(x = train_set, path = 'data/train-set.csv')
-write_csv(x = test_set, path = 'data/test-set.csv')
+#save(train_set, file="rdas/train-set.rda")
+#save(test_set, file="rdas/test-set.rda")
 
 #loss function
 RMSE <- function(true_ratings, predicted_ratings){sqrt(mean((true_ratings - predicted_ratings)^2))}
@@ -47,16 +47,18 @@ EFFECT <- function(d, l){
   b_y <- train_set %>% 
     group_by(year) %>%
     summarize(b_y = sum(rating - b_i - b_u - b_g - mu)/(n()+l))
-  fit <- loess(b_y ~ year, degree=1, span = 0.05, b_y, family="symmetric")
-  b_y_hat <- predict(fit, newdata = b_y)
+  fit_y <- loess(b_y ~ year, degree=1, span = 0.05, b_y, family="symmetric")
+  #save(fit_y, file="rdas/fit-y.rda")
+  b_y_hat <- predict(fit_y, newdata = b_y)
   b_y <- b_y %>% mutate(b_y = b_y_hat)
   train_set <- train_set %>%  left_join(b_y, by = "year")
   #rate year effect with smooth function
   b_r <- train_set %>% 
     group_by(r_date) %>%
     summarize(b_r = sum(rating - b_i - b_u - b_g - b_y - mu)/(n()+l))
-  fit <- loess(b_r ~ r_date, degree=1, span = 0.3, b_r, family="symmetric")
-  b_r_hat <- predict(fit, newdata = b_r)
+  fit_r <- loess(b_r ~ r_date, degree=1, span = 0.3, b_r, family="symmetric")
+  #save(fit_r, file="rdas/fit-r.rda")
+  b_r_hat <- predict(fit_r, newdata = b_r)
   b_r <- b_r %>% mutate(b_r = b_r_hat)
   train_set <- train_set %>%  left_join(b_r, by = "r_date")
   new_train <- train_set
@@ -85,7 +87,7 @@ rmses <- sapply(lambdas, function(l){
   RMSE(test_set$rating, pred$y_hat)
 })
 best_lambda <- data.frame(lambdas = lambdas, rmses = rmses)
-write_csv(x = best_lambda, path = 'data/best-lambda.csv')
+#save(best_lambda, file="rdas/best-lambda.rda")
 
 # make a new train set with best lambda and biases
 l <- lambdas[which.min(rmses)]
@@ -98,7 +100,7 @@ b_u <- new_train %>% group_by(userId) %>% summarise(b_u = b_u[1])
 b_g <- new_train %>% group_by(gen_ind) %>% summarise(b_g = b_g[1])
 b_y <- new_train %>% group_by(year) %>% summarise(b_y = b_y[1])
 b_r <- new_train %>% group_by(r_date) %>% summarise(b_r = b_r[1])
-write_csv(x = new_train, path = 'data/new-train.csv')
+#save(new_train, file="rdas/new-train.rda")
 
 #PRED function
 PRED <- function(d){
@@ -131,18 +133,21 @@ new_train_small <- new_train %>%
 
 #residual predictions by linear regression
 fit_lm <- train(resid ~ movieId + userId + gen_ind + year + r_date, method = "lm", new_train_small)
+#save(fit_lm, file="rdas/fit-lm.rda")
 resid_lm <- predict(fit_lm, pred)
 pred$resid_lm <- resid_lm
 pred <- pred %>% mutate(pred_lm = ifelse(y_hat+resid_lm <= 0.5, 0.5, ifelse(y_hat + resid_lm >= 5, 5, y_hat+resid_lm)))
 
 #residual predictions by logistc regression
 fit_glm <- train(resid ~ movieId + userId + gen_ind + year + r_date, method = "glm", new_train_small)
+#save(fit_glm, file="rdas/fit-glm.rda")
 resid_glm <- predict(fit_glm, pred)
 pred$resid_glm <- resid_glm
 pred <- pred %>% mutate(pred_glm = ifelse(y_hat+resid_glm <= 0.5, 0.5, ifelse(y_hat+resid_glm >= 5, 5, y_hat+resid_glm)))
 
 #residual predictions by local weighted regression
 fit_loess <- train(resid ~ movieId + userId + gen_ind + year + r_date, method = "gamLoess", new_train_small)
+#save(fit_loess, file="rdas/fit-loess.rda")
 resid_loess <- predict(fit_loess, pred)
 pred$resid_loess <- resid_loess
 pred <- pred %>% mutate(pred_loess = ifelse(y_hat+resid_loess <= 0.5, 0.5, ifelse(y_hat+resid_loess >= 5, 5, y_hat+resid_loess)))
@@ -150,7 +155,7 @@ pred <- pred %>% mutate(pred_loess = ifelse(y_hat+resid_loess <= 0.5, 0.5, ifels
 #ensemble
 pred <- pred %>% mutate(ensemble = (pred_lm + pred_glm + pred_loess)/3)
 pred <- pred %>% mutate(ensemble = ifelse(ensemble <= 0.5, 0.5, ifelse(ensemble >= 5, 5, ensemble)))
-write_csv(x = pred, path = 'data/pred.csv')
+#save(pred, file="rdas/pred.rda")
 
 #effect function with edx
 new_edx <- EFFECT(edx, l)
@@ -198,7 +203,7 @@ valid <- valid %>% mutate(pred_loess = ifelse(y_hat+resid_loess <= 0.5, 0.5, ife
 #ensemble
 valid <- valid %>% mutate(ensemble = (pred_lm + pred_glm + pred_loess)/3)
 valid <- valid %>% mutate(ensemble = ifelse(ensemble <= 0.5, 0.5, ifelse(ensemble >= 5, 5, ensemble)))
-write_csv(x = valid, path = 'data/valid.csv')
+save(valid, file="rdas/valid.rda")
 
 #RMSE
 RMSE(validation$rating, valid$ensemble)

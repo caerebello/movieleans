@@ -3,8 +3,18 @@ library(lubridate)
 library(caret)
 
 #read files
-edx <- as.data.frame(read_csv('data/edx.csv'))
-validation <- as.data.frame(read_csv('data/validation.csv'))
+td = tempdir()
+edx = tempfile(tmpdir=td, fileext=".rds")
+validation = tempfile(tmpdir=td, fileext=".rds")
+download.file("https://www.dropbox.com/s/nspymeso8rmmak1/edx.rds?dl=1", edx)
+download.file("https://www.dropbox.com/s/x0s477b0kzxpl6i/validation.rds?dl=1", validation)
+edx = readRDS(edx)
+validation = readRDS(validation)
+unlink(td)
+#write_csv(x = edx, path = 'data/edx.csv')
+#write_csv(x = validation, path = 'data/validation.csv')
+#edx <- as.data.frame(read_csv('data/edx.csv'))
+#validation <- as.data.frame(read_csv('data/validation.csv'))
 
 #make an index for genres
 gen_ind <- edx %>% group_by(genres) %>% summarise(genres=genres[1]) %>% mutate(gen_ind=seq(1:n()))
